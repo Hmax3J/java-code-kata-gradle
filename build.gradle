@@ -1,0 +1,28 @@
+plugins {
+    id 'java'
+}
+
+group = 'com.example'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    // @see https://mvnrepository.com
+    mavenCentral()
+}
+
+// dependency 의존성: 이때는 의존성 라이브러리
+//  프로그래밍에서 의존이란: "사용하고 있다"라고 생각해도 뜻이 얼추 통함.
+//  A ---<<uses>>---> B
+dependencies {
+    // lombok
+    compileOnly 'org.projectlombok:lombok:1.18.32'
+    annotationProcessor 'org.projectlombok:lombok:1.18.32'
+
+    // db
+    implementation 'org.postgresql:postgresql:42.7.3'
+    implementation 'org.flywaydb:flyway-core:9.22.3'
+}
+
+test {
+    useJUnitPlatform()
+}
