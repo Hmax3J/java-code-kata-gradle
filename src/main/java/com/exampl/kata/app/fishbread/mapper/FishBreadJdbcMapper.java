@@ -2,6 +2,8 @@ package com.exampl.kata.app.fishbread.mapper;
 
 import com.exampl.kata.app.fishbread.domain.FishBread;
 import com.exampl.kata.app.fishbread.domain.FishBreadStatus;
+import com.exampl.kata.common.exception.CustomException;
+import com.exampl.kata.common.exception.ErrorCode;
 import com.exampl.kata.common.support.jdbc.NullableJdbcMapper;
 
 import java.sql.ResultSet;
@@ -37,7 +39,7 @@ public class FishBreadJdbcMapper {
                     .updatedAt(updatedAt)
                     .build();
         } catch (SQLException e) {
-            throw new RuntimeException(e);
+            throw new CustomException(ErrorCode.FISHBREAD_QUERY_MAPPING_ERROR, e);
         }
     }
 

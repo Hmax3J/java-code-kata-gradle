@@ -1,14 +1,16 @@
 package com.exampl.kata.app.order.dao;
 
 import com.exampl.kata.app.order.domain.Order;
+import com.exampl.kata.app.order.domain.OrderStatus;
 import com.exampl.kata.app.order.mapper.OrderJdbcMapper;
 import com.exampl.kata.common.support.jdbc.NullableFieldJdbcStatement;
+import com.exampl.kata.common.support.paging.*;
+import com.exampl.kata.common.utils.jdbc.postgres.PostgresqlColumnTypeUtil;
 
 import java.sql.*;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import java.text.MessageFormat;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static com.exampl.kata.common.support.db.DatabaseConstants.*;
 
@@ -20,6 +22,8 @@ public class OrderDao {
             throw new RuntimeException(e);
         }
     }
+
+    private final Map<List<OrderStatus>, String> map = new ConcurrentHashMap<>();
 
     private final OrderJdbcMapper mapper = new OrderJdbcMapper();
 
@@ -57,7 +61,7 @@ public class OrderDao {
             jdbcStatement.setInt(index++, order.unitPrice);
             jdbcStatement.setInt(index++, order.count);
             jdbcStatement.setInt(index++, order.totalPrice);
-            jdbcStatement.setString(index++, order.status);
+            jdbcStatement.setString(index++, order.status.name());
             jdbcStatement.setTimestamp(index++, order.createdAt);
             jdbcStatement.setTimestamp(index, order.updatedAt);
 
@@ -93,8 +97,92 @@ public class OrderDao {
         }
     }
     
-    public List<Order> findByStatus() {
-        // TODO 상태에 따라 반환, 페이징
+    public List<Order> findByStatus(OrderStatus status, Pageable pageable) {
+        Objects.requireNonNull(status);
+
+        String sql = """
+                SELECT  *
+                FROM    "order"
+                WHERE   status = ?
+                """;
+
+        String suffixSql = switch (pageable) { // JDK 20
+            case OffsetPagingParameter param -> {
+                int size = param.size();
+                int page = param.page();
+
+                yield MessageFormat.format("""
+                        LIMIT {0} OFFSET {1}
+                        """,
+                        size,
+                        page * size
+                );
+            }
+            case KeySetPagingParameter param -> {
+                int size = param.size();
+                String columnName = param.columnName();
+                Object value = param.value();
+                ColumnType columnType = param.type();
+                OrderDirection direction = param.direction();
+
+                yield MessageFormat.format("""
+                            AND {0} {1} {2}
+                        ORDER BY {0}
+                        LIMIT {3}
+                        """,
+                        columnName,
+                        direction.exclusiveSign(),
+                        PostgresqlColumnTypeUtil.toSqlValue(value, columnType),
+                        size
+                );
+            }
+            case null -> throw new Error();
+        };
+
+        // TODO 페이징
         return Collections.emptyList();
+    }
+
+    public List<Order> findByStatusIn(List<OrderStatus> statusList) {
+        assert !(statusList == null || statusList.isEmpty()) : "";
+
+        // String 상수 풀
+        String statusIn = map.computeIfAbsent(statusList, this::generateStatusIn);
+        String sql = MessageFormat.format(
+                "SELECT * FROM \"order\" WHERE {0}",
+                statusIn
+        );
+
+        try (
+                Connection connection = DriverManager.getConnection(
+                        DB_URL,
+                        DB_USERNAME,
+                        DB_PASSWORD
+                );
+                Statement statement = connection.createStatement();
+        ) {
+            ResultSet resultSet = statement.executeQuery(sql);
+            return mapper.toEntityList(resultSet);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+
+        // TODO 페이징
+        // return Collections.emptyList();
+    }
+
+    private String generateStatusIn(List<OrderStatus> statusList) {
+        if (statusList == null || statusList.isEmpty()) {
+            throw new RuntimeException("status 목록을 비우고 조회할 수 없습니다.");
+        }
+
+        List<String> strList = statusList.stream()
+                .map(OrderStatus::name) // 따로 오버라이딩 안 했으면 Enum::name와 같음.
+                .toList();
+
+        return MessageFormat.format(
+                "status IN ('{0}')",
+                String.join("', '", strList)
+        );
     }
 }

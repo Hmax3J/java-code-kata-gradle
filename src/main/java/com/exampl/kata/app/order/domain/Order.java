@@ -13,7 +13,7 @@ public class Order {
     public Integer unitPrice;
     public Integer count;
     public Integer totalPrice;
-    public String status; // TODO use enum order status
+    public OrderStatus status;
     public Instant createdAt;
     public Instant updatedAt;
 }
